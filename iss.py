@@ -27,6 +27,7 @@ headersAllDict = {"Accept": "*/*" , "User-Agent" : "PythonISS/1.0 (http://www.fe
 
 sUrlPosition = 'http://api.open-notify.org/iss-now.json'
 sUrlInfo1 = "https://corquaid.github.io/international-space-station-APIs/JSON/people-in-space.json"
+sUrlInfo2 = "https://corquaid.github.io/international-space-station-APIs/JSON/iss-docked-spacecraft.json"
 CurrentData = {'expedition_patch':'' , 'expedition_image':''}
 patchImg = 'patch.bmp3'
 crewImg = 'crew.bmp3'
@@ -36,6 +37,9 @@ crewImg = 'crew.bmp3'
 bAction = False
 s = requests.Session()
 
+
+def RGB( red, green, blue ):
+	return red + (green * 256) + (blue * 65536)
 
 # convert patch.png -resize 480x320 -gravity center -extent 480x320 patch.bmp3
 
@@ -49,7 +53,7 @@ def getImage( imageType,localImageName ):
 	if ( patchUrl != CurrentData[imageType] or not (os.path.exists(localImageName))):
 		print("redownloading file")
 		test = pydisplay.clearScreen()
-		test = pydisplay.drawString("Processing...",20,20,4)
+		test = pydisplay.drawString("Processing...",20,20,4,RGB(205,105,201))
 		CurrentData[imageType]= patchUrl
 		img = s.get(patchUrl,headers=headersAllDict, proxies=proxyDict)
 		fileName = patchUrl.split("/")[-1:][0]
@@ -68,32 +72,70 @@ def callback_mission():
 	global bAction
 	bAction = True
 	getImage("expedition_patch",patchImg)
+	time.sleep(10)
 	bAction = False
-	exit()
 
 def callback_crewphoto():
 	global bAction
 	bAction = True
 	getImage("expedition_image",crewImg)
+	time.sleep(10)
 	bAction = False
-	exit()
 
 def callback_crewmembers():
 	global bAction
 	bAction = True
-	print("crew members")
+	r = s.get(sUrlInfo1, headers= headersDict, proxies=proxyDict)
+	jsontext = r.text
+	response = json.loads(jsontext)
+	pydisplay.clearScreen()
+	i = 0
+	pydisplay.drawString("Current Crew",80,20,2,RGB(205,105,201))
+	for astro in response["people"]:
+		#print(astro)
+		if ( astro["iss"] == True ):
+			pydisplay.drawString(astro["position"] + ":",20,50+i*25,-1,RGB(0,125,255))
+			pydisplay.drawString(astro["name"]  + " (" + astro["country"] + ")",200,80+i*25,-1,RGB(0,125,255))
+			i = i +1
+	time.sleep(10)
 	bAction = False
 
 def callback_spacecrafts():
 	global bAction
 	bAction = True
-	print("spacecrafts")
+	r = s.get(sUrlInfo2, headers= headersDict, proxies=proxyDict)
+	jsontext = r.text
+	response = json.loads(jsontext)
+	pydisplay.clearScreen()
+	i = 0
+	pydisplay.drawString("Visiting spaceships",80,20,2,RGB(205,105,201))
+	for spacecraft in response["spacecraft"]:
+		if ( spacecraft["iss"] == True ):
+			pydisplay.drawString(spacecraft["name"] + ":",20,50+i*25,-1,RGB(0,125,255))
+			pydisplay.drawString(spacecraft["country"] + " (" + spacecraft["mission_type"] + ")",200,80+i*25,-1,RGB(0,125,255))
+			i = i +1
+	time.sleep(10)
 	bAction = False
 
-def callback_surprise():
+def callback_diapo():
 	global bAction
 	bAction = True
-	print("surprise")
+	r = s.get(sUrlInfo1, headers= headersDict, proxies=proxyDict)
+	jsontext = r.text
+	response = json.loads(jsontext)
+	pydisplay.clearScreen()
+	i = 0
+	for astro in response["people"]:
+		localImageName = str(i) + ".BMP3"
+		if ( astro["iss"] == True ):
+			img = s.get(astro["image"],headers=headersAllDict, proxies=proxyDict)
+			fileName = astro["image"].split("/")[-1:][0]
+			open(fileName, 'wb').write(img.content)
+			sCommand = "convert " + fileName + " -resize 480x320 -gravity center -extent 480x320 " + localImageName
+			print(sCommand)
+			os.system(sCommand)
+			pydisplay.showBMP(localImageName)
+			i = i +1
 	bAction = False
 
 def callback_shutdown():
@@ -149,7 +191,8 @@ while True:
 	longitude =int(round(float(position["longitude"])))
 	latitude =int(round(float(position["latitude"])))
 #	print(longitude, latitude)
-	callback_crewphoto()
+	callback_diapo()
+	exit()
 	if ( bAction == False ):
 		test = pydisplay.showBMP("world.bmp")
 		test = pydisplay.showISS(longitude, latitude)

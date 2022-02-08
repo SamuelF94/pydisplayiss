@@ -19,6 +19,20 @@
 #define G_VALUE 0
 #define B_VALUE 255
 
+#define BYTE	uint8_t
+#define WORD	uint16_t
+#define DWORD	uint32_t
+
+#define LOBYTE(w)           ((BYTE)(((DWORD)(w)) & 0xff))
+
+
+#define RGB(r,g,b)      ((uint32_t)(((BYTE)(r)|((WORD)((BYTE)(g))<<8))|(((DWORD)(BYTE)(b))<<16)))
+#define GETRVALUE(rgb)      (LOBYTE(rgb))
+#define GETGVALUE(rgb)      (LOBYTE(((WORD)(rgb)) >> 8))
+#define GETBVALUE(rgb)      (LOBYTE((rgb)>>16))
+
+
+
 #define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
 #define BYTE_TO_BINARY(byte)  \
   (byte & 0x80 ? '1' : '0'), \
@@ -150,9 +164,21 @@ void put_pixel_RGB565(uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b)
 }
 
 
-void DrawChar(char c, uint16_t x, uint16_t y,uint8_t fontsize)
+void DrawChar(char c, uint16_t x, uint16_t y,int8_t fontsize, uint32_t color)
 {
     uint8_t i,j;
+	int8_t fontsize_x, fontsize_y;
+	
+	if ( fontsize > 0 )
+	{
+		fontsize_x = fontsize_y = fontsize;
+	}	
+	else
+	{
+		fontsize_x = 1;
+		fontsize_y = 2;
+	}
+
 
     // Convert the character to an index
     c = c & 0x7F;
@@ -161,6 +187,9 @@ void DrawChar(char c, uint16_t x, uint16_t y,uint8_t fontsize)
     // which is really just a 1D array of size 128*char_width.
     const uint8_t* chr = font8x8_basic[(uint8_t)c];
     uint8_t r,g,b;
+	r = GETRVALUE(color);
+	g = GETGVALUE(color);
+	b = GETBVALUE(color);
     // Draw pixels
     for (j=0; j<CHAR_WIDTH; j++)
     {
@@ -170,11 +199,10 @@ void DrawChar(char c, uint16_t x, uint16_t y,uint8_t fontsize)
         {
             if (bit_set(val,i))
             {
-                r=R_VALUE; g = G_VALUE ; b=B_VALUE;
-	            for ( jsize = 0 ; jsize < fontsize; jsize++)
+	            for ( jsize = 0 ; jsize < fontsize_y; jsize++)
     	        {
-        	        for ( isize = 0 ; isize < fontsize; isize++)
-            	        put_pixel_RGB565(x+i*fontsize+jsize, y+j*fontsize+isize, r,g,b);
+        	        for ( isize = 0 ; isize < fontsize_x; isize++)
+            	        put_pixel_RGB565(x+i*fontsize_x+jsize, y+j*fontsize_y+isize, r,g,b);
 	            }
 			}
         }
@@ -182,7 +210,7 @@ void DrawChar(char c, uint16_t x, uint16_t y,uint8_t fontsize)
 }
 
 
-void DrawString(const char* str, uint16_t x, uint16_t y, uint8_t fontsize)
+void DrawString(const char* str, uint16_t x, uint16_t y, int8_t fontsize, uint32_t color)
 {
 
 #ifdef DEBUG_LOG
@@ -190,8 +218,8 @@ void DrawString(const char* str, uint16_t x, uint16_t y, uint8_t fontsize)
 #endif
     while (*str)
 	{
-    	DrawChar(*str++, x, y,fontsize);
-        x += CHAR_WIDTH*fontsize;
+    	DrawChar(*str++, x, y,fontsize, color);
+        x += CHAR_WIDTH*(fontsize > 0 ? fontsize : 1 );
     }
 }
 
@@ -234,7 +262,7 @@ void DrawISS( int lon, int lat)
         }
     }
 	snprintf(szPos,sizeof(szPos)-1,"Lat:%d%s - Lon:%d%s",abs(lat),lat>0?"W":"E",abs(lon),lon>0?"S":"N");
-	DrawString(szPos,40,300,2);
+	DrawString(szPos,40,300,2,RGB(0,0,255));
 }
 
 
@@ -399,8 +427,9 @@ static PyObject *pydisplay_drawString(PyObject *self, PyObject *args)
 {
     const char *str;
 	int  x,y,size;
+	uint32_t color;
 
-    if (!PyArg_ParseTuple(args, "siii", &str,&x,&y,&size))
+    if (!PyArg_ParseTuple(args, "siiil", &str,&x,&y,&size,&color))
     {
         return NULL;
     }
@@ -410,7 +439,7 @@ static PyObject *pydisplay_drawString(PyObject *self, PyObject *args)
         return NULL;
 	}
 
-	DrawString(str, x, y, size);
+	DrawString(str, x, y, size,color);
 
     freeFramebuffer();
 
