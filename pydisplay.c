@@ -11,8 +11,13 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "font.h"
 
-
+#define CHAR_WIDTH 8
+#define CHAR_HEIGHT 8
+#define R_VALUE 0
+#define G_VALUE 0
+#define B_VALUE 255
 
 #define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
 #define BYTE_TO_BINARY(byte)  \
@@ -106,6 +111,7 @@ typedef struct tagWIN4XBITMAPINFOHEADER
 
 // 'global' variables to store screen info
 uint8_t* fbp = 0;
+int fbfd = 0;
 struct fb_var_screeninfo vinfo = { 0 };
 struct fb_fix_screeninfo finfo = { 0 };
 
@@ -144,20 +150,68 @@ void put_pixel_RGB565(uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b)
 }
 
 
-uint8_t star[8] =  { 0x00, 0x66, 0x3C, 0xFF, 0x3C, 0x66, 0x00, 0x00};
+void DrawChar(char c, uint16_t x, uint16_t y,uint8_t fontsize)
+{
+    uint8_t i,j;
 
+    // Convert the character to an index
+    c = c & 0x7F;
+
+    // 'font' is a multidimensional array of [128][char_width]
+    // which is really just a 1D array of size 128*char_width.
+    const uint8_t* chr = font8x8_basic[(uint8_t)c];
+    uint8_t r,g,b;
+    // Draw pixels
+    for (j=0; j<CHAR_WIDTH; j++)
+    {
+        uint8_t val = chr[j];
+        uint8_t isize, jsize;
+        for (i=0; i<CHAR_HEIGHT; i++)
+        {
+            if (bit_set(val,i))
+            {
+                r=R_VALUE; g = G_VALUE ; b=B_VALUE;
+	            for ( jsize = 0 ; jsize < fontsize; jsize++)
+    	        {
+        	        for ( isize = 0 ; isize < fontsize; isize++)
+            	        put_pixel_RGB565(x+i*fontsize+jsize, y+j*fontsize+isize, r,g,b);
+	            }
+			}
+        }
+    }
+}
+
+
+void DrawString(const char* str, uint16_t x, uint16_t y, uint8_t fontsize)
+{
+
+#ifdef DEBUG_LOG
+     printf("fontsize:%d\n",fontsize);
+#endif
+    while (*str)
+	{
+    	DrawChar(*str++, x, y,fontsize);
+        x += CHAR_WIDTH*fontsize;
+    }
+}
+
+
+
+
+uint8_t star[8] =  { 0x00, 0x66, 0x3C, 0xFF, 0x3C, 0x66, 0x00, 0x00};
 void DrawISS( int lon, int lat)
 {
     int i,j;
     const uint8_t* chr = star;
 	uint8_t fontsize = 2;
+	char szPos[100];
 
 	// longitude varies from -180 to 180, 
 	int x = (lon*480)/360 + 240;
 	int y = ((-1)*lat*320)/180 + 160;
 
     // Draw pixels
-	printf("%d=>%d - %d=>%d\n",lon, x,lat, y);
+//	printf("%d=>%d - %d=>%d\n",lon, x,lat, y);
 	// re-centering coordinates  as we display a 16x16 star
 	if ( x > 8 )
 		x-= 8;
@@ -179,6 +233,8 @@ void DrawISS( int lon, int lat)
 			}
         }
     }
+	snprintf(szPos,sizeof(szPos)-1,"Lat:%d%s - Lon:%d%s",abs(lat),lat>0?"W":"E",abs(lon),lon>0?"S":"N");
+	DrawString(szPos,40,300,2);
 }
 
 
@@ -239,6 +295,53 @@ void Draw_Bitmap (const char* BitmapName,  uint8_t* FrameBuffer)
 }
 
 
+int initFramebuffer()
+{
+	fbfd = open("/dev/fb1", O_RDWR);
+	if (fbfd == -1) 
+	{
+		perror("Error: cannot open framebuffer device.\n");
+		return(0);
+	}
+
+	// Get variable screen information
+	if (ioctl(fbfd, FBIOGET_VSCREENINFO, &vinfo)) 
+	{
+		perror("Error reading variable information.\n");
+		close(fbfd);
+		return(0);
+	}
+//	printf("bits per pixel:%d, width:%d, heigth:%d\n",vinfo.bits_per_pixel,vinfo.xres,vinfo.yres); 
+
+
+	// Get fixed screen information
+	if (ioctl(fbfd, FBIOGET_FSCREENINFO, &finfo)) {
+		perror("Error reading fixed information.\n");
+		close(fbfd);
+		return(0);
+	}
+/**	printf("mem_size:%d\n",finfo.smem_len);  **/
+
+
+	// map fb to user mem
+	fbp = (uint8_t*)mmap(0,	finfo.smem_len,		PROT_READ | PROT_WRITE,		MAP_SHARED,		fbfd,		0);
+
+	if ( fbp == (uint8_t*)-1 )
+		return(0);
+
+	return 1;
+}
+
+
+void freeFramebuffer()
+{
+	munmap(fbp, finfo.smem_len);
+	// close fb fil
+	close(fbfd);
+}
+
+
+
 static PyObject *pydisplay_showISS(PyObject *self, PyObject *args)
 {
 	int lat, lon;
@@ -247,43 +350,12 @@ static PyObject *pydisplay_showISS(PyObject *self, PyObject *args)
 		return NULL;
 	}
 
-	int fbfd = open("/dev/fb1", O_RDWR);
-	if (fbfd == -1) 
-	{
-		perror("Error: cannot open framebuffer device.\n");
-		return(0);
-	}
-
-	// Get variable screen information
-	if (ioctl(fbfd, FBIOGET_VSCREENINFO, &vinfo)) 
-	{
-		perror("Error reading variable information.\n");
-		close(fbfd);
-		return(0);
-	}
-//	printf("bits per pixel:%d, width:%d, heigth:%d\n",vinfo.bits_per_pixel,vinfo.xres,vinfo.yres); 
-
-
-	// Get fixed screen information
-	if (ioctl(fbfd, FBIOGET_FSCREENINFO, &finfo)) {
-		perror("Error reading fixed information.\n");
-		close(fbfd);
-		return(0);
-	}
-/**	printf("mem_size:%d\n",finfo.smem_len);  **/
-
-
-	// map fb to user mem
-	fbp = (uint8_t*)mmap(0,	finfo.smem_len,		PROT_READ | PROT_WRITE,		MAP_SHARED,		fbfd,		0);
-
-	if ( fbp == (uint8_t*)-1 )
-		return(0);
+	if ( initFramebuffer() == 0 )
+		return NULL;
 
 	DrawISS(lon, lat);
 
-	munmap(fbp, finfo.smem_len);
-	// close fb fil
-	close(fbfd);
+	freeFramebuffer();
 
     return PyLong_FromLong(1);
 }
@@ -292,62 +364,65 @@ static PyObject *pydisplay_showISS(PyObject *self, PyObject *args)
 static PyObject *pydisplay_showBMP(PyObject *self, PyObject *args)
 {
     const char *filepath;
-    int sts;
 
     if (!PyArg_ParseTuple(args, "s", &filepath))
 	{
 		return NULL;
 	}
 
-	// Open the file for reading and writing
-	int fbfd = open("/dev/fb1", O_RDWR);
-	if (fbfd == -1) 
-	{
-		perror("Error: cannot open framebuffer device.\n");
-		return(0);
-	}
-
-	// Get variable screen information
-	if (ioctl(fbfd, FBIOGET_VSCREENINFO, &vinfo)) 
-	{
-		perror("Error reading variable information.\n");
-		close(fbfd);
-		return(0);
-	}
-//	printf("bits per pixel:%d, width:%d, heigth:%d\n",vinfo.bits_per_pixel,vinfo.xres,vinfo.yres); 
-
-
-	// Get fixed screen information
-	if (ioctl(fbfd, FBIOGET_FSCREENINFO, &finfo)) {
-		perror("Error reading fixed information.\n");
-		close(fbfd);
-		return(0);
-	}
-/**	printf("mem_size:%d\n",finfo.smem_len);  **/
-
-
-	// map fb to user mem
-	fbp = (uint8_t*)mmap(0,	finfo.smem_len,		PROT_READ | PROT_WRITE,		MAP_SHARED,		fbfd,		0);
-
-	if ( fbp == (uint8_t*)-1 )
-		return(0);
+	if ( initFramebuffer() == 0 )
+		return NULL;
 
 	Draw_Bitmap (filepath, fbp);
 
-	munmap(fbp, finfo.smem_len);
-	// close fb fil
-	close(fbfd);
+	freeFramebuffer();
 
-    sts = 0;
-    return PyLong_FromLong(sts);
+    return PyLong_FromLong(1);
 }
 
 
+
+static PyObject *pydisplay_clearScreen(PyObject *self,  PyObject *args)
+{
+	if ( initFramebuffer() == 0 )
+		return NULL;
+
+	memset(fbp,0,finfo.smem_len);
+
+	freeFramebuffer();
+
+	Py_RETURN_TRUE;
+}
+
+
+static PyObject *pydisplay_drawString(PyObject *self, PyObject *args)
+{
+    const char *str;
+	int  x,y,size;
+
+    if (!PyArg_ParseTuple(args, "siii", &str,&x,&y,&size))
+    {
+        return NULL;
+    }
+
+    if ( initFramebuffer() == 0 )
+	{
+        return NULL;
+	}
+
+	DrawString(str, x, y, size);
+
+    freeFramebuffer();
+
+    return PyLong_FromLong(1);
+}
 
 
 static PyMethodDef pydisplayMethods[] = {
     {"showBMP", pydisplay_showBMP, METH_VARARGS, "Displays a 480x320 24bits BMP."},
     {"showISS", pydisplay_showISS, METH_VARARGS, "Displays a yellow star."},
+	{ "clearScreen", pydisplay_clearScreen, METH_NOARGS, "Clears the screen" },
+	{ "drawString", pydisplay_drawString, METH_VARARGS, "displays a string" },
     {NULL, NULL, 0, NULL}        /* Sentinel */
 };
 
