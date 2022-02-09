@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <fcntl.h>
 #include <linux/fb.h>
 #include <sys/ioctl.h>
@@ -140,6 +141,29 @@ uint16_t RGB16(uint8_t r, uint8_t g, uint8_t b )
 
 
 
+/* msleep(): Sleep for the requested number of milliseconds. */
+int msleep(long msec)
+{
+    struct timespec ts;
+    int res;
+
+    if (msec < 0)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
+    ts.tv_sec = msec / 1000;
+    ts.tv_nsec = (msec % 1000) * 1000000;
+
+    do {
+        res = nanosleep(&ts, &ts);
+    } while (res && errno == EINTR);
+
+    return res;
+}
+
+
 void put_pixel_RGB565(uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b)
 {
 
@@ -245,6 +269,10 @@ void DrawISS( int lon, int lat)
 	int x = (lon*480)/360 + 240;
 	int y = ((-1)*lat*320)/180 + 160;
 
+
+	snprintf(szPos,sizeof(szPos)-1,"Lat:%d%s - Lon:%d%s",abs(lat),lat>0?"W":"E",abs(lon),lon>0?"N":"S");
+//	DrawString(szPos,100,300,2,RGB(0,0,255),0);
+
     // Draw pixels
 //	printf("%d=>%d - %d=>%d\n",lon, x,lat, y);
 	// re-centering coordinates  as we display a 16x16 star
@@ -252,24 +280,18 @@ void DrawISS( int lon, int lat)
 		x-= 8;
 	if ( y < 314 )
 		y += 16;
-    for (j=0; j<8; j++) 
-	{
-		uint8_t val = chr[j];
-		uint8_t isize, jsize;
-        for (i=0; i<8; i++) 
-		{
-			if (bit_set(val,i))
-			{
-				for ( jsize = 0 ; jsize < fontsize; jsize++)
-				{
-					for ( isize = 0 ; isize < fontsize; isize++)
-						put_pixel_RGB565(x+i*fontsize+jsize, y+j*fontsize+isize, 255,216,0);
-				}
-			}
-        }
-    }
-	snprintf(szPos,sizeof(szPos)-1,"Lat:%d%s - Lon:%d%s",abs(lat),lat>0?"W":"E",abs(lon),lon>0?"S":"N");
-	DrawString(szPos,40,300,2,RGB(0,0,255),0);
+
+	DrawChar('*', x, y,2,RGB(255,253,35),0);
+	msleep(100);
+	DrawChar('*', x, y,2,RGB(255,0,0),0);
+	msleep(100);
+	DrawChar('*', x, y,2,RGB(255,253,35),0);
+	msleep(100);
+	DrawChar('*', x, y,2,RGB(255,0,0),0);
+	msleep(100);
+	DrawChar('*', x, y,2,RGB(255,253,35),0);
+
+
 }
 
 

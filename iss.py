@@ -47,16 +47,27 @@ s = requests.Session()
 
 class Blinker (threading.Thread):
 	def __init__(self):
+		global bBlink
+		bBlink = True
 		threading.Thread.__init__(self)
+		GPIO.setmode(GPIO.BCM) # use GPIO number and not pin numbers
+		GPIO.setup(16, GPIO.OUT, initial = GPIO.LOW)	# LED to blink
+
 
 	def run(self):
 		global bBlink
 		while True:
 			try:
-				GPIO.output(20, bBlink)
+				if ( bBlink == True ):
+					print("blink")
+				GPIO.output(16, bBlink)
 				time.sleep(0.5)
-				GPIO.output(20, 0)
+				GPIO.output(16, 0)
 				time.sleep(0.5)
+			except Exception as e:
+				print(e)
+				print("Blink exception")
+
 
 
 def RGB( red, green, blue ):
@@ -265,10 +276,11 @@ while True:
 			test = pydisplay.showBMP("world.bmp")
 			test = pydisplay.showISS(longitude, latitude)
 			ISSPos = ( latitude, longitude )
-			if ( geodesic( MyPos,ISSPos).km < 800 ):
+			distance =geodesic( MyPos,ISSPos).km 
+			if ( distance < 800 ):
 				bBlink = True
-			else
-				bblick = False;
+			else:
+				bBlink = False
 	except:
 		print("Main loop exception");
 	finally:
