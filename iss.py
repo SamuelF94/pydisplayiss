@@ -28,10 +28,11 @@ headersAllDict = {"Accept": "*/*" , "User-Agent" : "PythonISS/1.0 (http://www.fe
 sUrlPosition = 'http://api.open-notify.org/iss-now.json'
 sUrlInfo1 = "https://corquaid.github.io/international-space-station-APIs/JSON/people-in-space.json"
 sUrlInfo2 = "https://corquaid.github.io/international-space-station-APIs/JSON/iss-docked-spacecraft.json"
+cacheDir = 'cache'
 CurrentData = {'expedition_patch':'' , 'expedition_image':''}
-patchImg = 'patch.bmp3'
-crewImg = 'crew.bmp3'
-
+patchImg = 'cache/patch.bmp3'
+crewImg = 'cache/crew.bmp3'
+diapo_tempo = 15
 
 
 bAction = False
@@ -56,7 +57,7 @@ def getImage( imageType,localImageName ):
 		test = pydisplay.drawString("Processing...",20,20,4,RGB(205,105,201))
 		CurrentData[imageType]= patchUrl
 		img = s.get(patchUrl,headers=headersAllDict, proxies=proxyDict)
-		fileName = patchUrl.split("/")[-1:][0]
+		fileName = cacheDir + '/' + patchUrl.split("/")[-1:][0]
 		open(fileName, 'wb').write(img.content)
 		sCommand = "convert " + fileName + " -resize 480x320 -gravity center -extent 480x320 " + localImageName
 		print(sCommand)
@@ -67,83 +68,120 @@ def getImage( imageType,localImageName ):
 
 
 
-
 def callback_mission():
-	global bAction
-	bAction = True
-	getImage("expedition_patch",patchImg)
-	time.sleep(10)
-	bAction = False
+	try:
+		global bAction
+		bAction = True
+		getImage("expedition_patch",patchImg)
+		time.sleep(10)
+	except:
+		print("callback_mission exception")
+	finally:
+		bAction = False
+	
 
 def callback_crewphoto():
-	global bAction
-	bAction = True
-	getImage("expedition_image",crewImg)
-	time.sleep(10)
-	bAction = False
+	try
+		global bAction
+		bAction = True
+		getImage("expedition_image",crewImg)
+		time.sleep(10)
+		bAction = False
+    except:
+        print("callback_crewphoto exception")
+    finally:
+        bAction = False
+
 
 def callback_crewmembers():
-	global bAction
-	bAction = True
-	r = s.get(sUrlInfo1, headers= headersDict, proxies=proxyDict)
-	jsontext = r.text
-	response = json.loads(jsontext)
-	pydisplay.clearScreen()
-	i = 0
-	pydisplay.drawString("Current Crew",80,20,2,RGB(205,105,201))
-	for astro in response["people"]:
-		#print(astro)
-		if ( astro["iss"] == True ):
-			pydisplay.drawString(astro["position"] + ":",20,50+i*25,-1,RGB(0,125,255))
-			pydisplay.drawString(astro["name"]  + " (" + astro["country"] + ")",200,80+i*25,-1,RGB(0,125,255))
-			i = i +1
-	time.sleep(10)
-	bAction = False
+	try:
+		global bAction
+		bAction = True
+		r = s.get(sUrlInfo1, headers= headersDict, proxies=proxyDict)
+		jsontext = r.text
+		response = json.loads(jsontext)
+		pydisplay.clearScreen()
+		i = 0
+		pydisplay.drawString("Current Crew",80,20,2,RGB(205,105,201))
+		for astro in response["people"]:
+			#print(astro)
+			if ( astro["iss"] == True ):
+				pydisplay.drawString(astro["position"] + ":",20,50+i*25,-1,RGB(0,125,255))
+				pydisplay.drawString(astro["name"]  + " (" + astro["country"] + ")",200,80+i*25,-1,RGB(0,125,255))
+				i = i +1
+		time.sleep(10)
+    except:
+        print("callback_crewmembers exception")
+    finally:
+        bAction = False
+
 
 def callback_spacecrafts():
-	global bAction
-	bAction = True
-	r = s.get(sUrlInfo2, headers= headersDict, proxies=proxyDict)
-	jsontext = r.text
-	response = json.loads(jsontext)
-	pydisplay.clearScreen()
-	i = 0
-	pydisplay.drawString("Visiting spaceships",80,20,2,RGB(205,105,201))
-	for spacecraft in response["spacecraft"]:
-		if ( spacecraft["iss"] == True ):
-			pydisplay.drawString(spacecraft["name"] + ":",20,50+i*25,-1,RGB(0,125,255))
-			pydisplay.drawString(spacecraft["country"] + " (" + spacecraft["mission_type"] + ")",200,80+i*25,-1,RGB(0,125,255))
-			i = i +1
-	time.sleep(10)
-	bAction = False
+	try:
+		global bAction
+		bAction = True
+		r = s.get(sUrlInfo2, headers= headersDict, proxies=proxyDict)
+		jsontext = r.text
+		response = json.loads(jsontext)
+		pydisplay.clearScreen()
+		i = 0
+		pydisplay.drawString("Visiting spaceships",80,20,2,RGB(205,105,201))
+		for spacecraft in response["spacecraft"]:
+			if ( spacecraft["iss"] == True ):
+				pydisplay.drawString(spacecraft["name"] + ":",20,50+i*25,-1,RGB(0,125,255))
+				pydisplay.drawString(spacecraft["country"] + " (" + spacecraft["mission_type"] + ")",200,80+i*25,-1,RGB(0,125,255))
+				i = i +1
+		time.sleep(10)
+    except:
+        print("callback_spacecrafts exception")
+    finally:
+        bAction = False
 
 def callback_diapo():
-	global bAction
-	bAction = True
-	r = s.get(sUrlInfo1, headers= headersDict, proxies=proxyDict)
-	jsontext = r.text
-	response = json.loads(jsontext)
-	pydisplay.clearScreen()
-	i = 0
-	for astro in response["people"]:
-		localImageName = str(i) + ".BMP3"
-		if ( astro["iss"] == True ):
-			img = s.get(astro["image"],headers=headersAllDict, proxies=proxyDict)
-			fileName = astro["image"].split("/")[-1:][0]
-			open(fileName, 'wb').write(img.content)
-			sCommand = "convert " + fileName + " -resize 480x320 -gravity center -extent 480x320 " + localImageName
-			print(sCommand)
-			os.system(sCommand)
-			pydisplay.showBMP(localImageName)
-			i = i +1
-	bAction = False
+	try:
+		global bAction
+		bAction = True
+		r = s.get(sUrlInfo1, headers= headersDict, proxies=proxyDict)
+		jsontext = r.text
+		response = json.loads(jsontext)
+		pydisplay.clearScreen()
+		i = 0
+		for astro in response["people"]:
+			localImageName = cacheDir + '/' + astro["name"].replace(" ","_") + ".BMP3"
+			start = time.time()
+			if ( astro["iss"] == True ):
+				if ( not os.path.exists(localImageName) ):
+					img = s.get(astro["image"],headers=headersAllDict, proxies=proxyDict)
+					fileName = cacheDir + '/' + astro["image"].split("/")[-1:][0]
+					open(fileName, 'wb').write(img.content)
+					sCommand = "convert " + fileName + " -resize 480x320 -gravity center -extent 480x320 " + localImageName
+					print(sCommand)
+					os.system(sCommand)
+				end = time.time()
+				if ( (i > 0) and (end-start)<diapo_tempo):
+					time.sleep(diapo_tempo-(end-start))
+				pydisplay.showBMP(localImageName)
+				pydisplay.clearScreenBottom();
+				displayName = astro["name"].center(30)
+				pydisplay.drawString(displayName,0,280,2,RGB(255,125,125),1)
+				displayName = (astro["position"] + " " + astro["country"]).center(30)
+				pydisplay.drawString(displayName,0,300,2,RGB(255,125,125),1)
+				i = i +1
+    except:
+        print("callback_diapo exception")
+    finally:
+        bAction = False
 
 def callback_shutdown():
-	global bAction
-	bAction = True
-	print("shutdown")
-	bAction = False
-
+	try:
+		global bAction
+		bAction = True
+		print("shutdown")
+		os.system("sudo /usr/sbin/shutdown now");
+    except:
+        print("callback_shutdown exception")
+    finally:
+        bAction = False
 
 
 
@@ -157,7 +195,7 @@ def GPIOSetup():
 	GPIO.setup(6, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)	# display crew photo - pin 31 
 	GPIO.setup(13, GPIO.IN,pull_up_down=GPIO.PUD_DOWN)	# display crew members - pin 33
 	GPIO.setup(19, GPIO.IN,pull_up_down=GPIO.PUD_DOWN)	# display currently docked spacecrafts - pin 35
-	GPIO.setup(26, GPIO.IN,pull_up_down=GPIO.PUD_DOWN)	# display i don't know what... yet - pin 37
+	GPIO.setup(26, GPIO.IN,pull_up_down=GPIO.PUD_DOWN)	# display crew diaporama pin 37
 	GPIO.setup(21, GPIO.IN,pull_up_down=GPIO.PUD_DOWN)	#  shutdown - pin 40
 
 	GPIO.add_event_detect(5, GPIO.RISING, callback=callback_mission, bouncetime=300)
@@ -171,6 +209,8 @@ def GPIOSetup():
 
 def Init():
 	global CurrentData
+	if ( not os.path.exists(cacheDir)):
+		os.mkdir(cacheDir)
 	with open('iss.json') as json_file:
 		CurrentData = json.load(json_file)
 
@@ -184,17 +224,20 @@ Init()
 test = pydisplay.showBMP("world.bmp")
 
 while True:
-	r = s.get(sUrlPosition, headers= headersDict, proxies=proxyDict)
-	jsontext = r.text
-	response = json.loads(jsontext)
-	position = response["iss_position"]
-	longitude =int(round(float(position["longitude"])))
-	latitude =int(round(float(position["latitude"])))
-#	print(longitude, latitude)
-	callback_diapo()
-	exit()
-	if ( bAction == False ):
-		test = pydisplay.showBMP("world.bmp")
-		test = pydisplay.showISS(longitude, latitude)
-	time.sleep(10)
-
+	try:
+		r = s.get(sUrlPosition, headers= headersDict, proxies=proxyDict)
+		jsontext = r.text
+		response = json.loads(jsontext)
+		position = response["iss_position"]
+		longitude =int(round(float(position["longitude"])))
+		latitude =int(round(float(position["latitude"])))
+	#	print(longitude, latitude)
+		if ( bAction == False ):
+			test = pydisplay.showBMP("world.bmp")
+			test = pydisplay.showISS(longitude, latitude)
+		
+	except:
+		print("Main loop exception");
+	finally:
+		time.sleep(10)
+	

@@ -93,7 +93,6 @@ typedef struct tagBITMAPINFOHEADER {
 	uint32_t biClrImportant; 					// Min colours needed
 } BITMAPINFOHEADER, * PBITMAPINFOHEADER;
 #pragma pack()
-
 /*--------------------------------------------------------------------------}
 {				  BITMAP VER 4 FILE INFO HEADER DEFINITION					}
 {--------------------------------------------------------------------------*/
@@ -164,7 +163,7 @@ void put_pixel_RGB565(uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b)
 }
 
 
-void DrawChar(char c, uint16_t x, uint16_t y,int8_t fontsize, uint32_t color)
+void DrawChar(char c, uint16_t x, uint16_t y,int8_t fontsize, uint32_t color, uint8_t erase)
 {
     uint8_t i,j;
 	int8_t fontsize_x, fontsize_y;
@@ -205,12 +204,20 @@ void DrawChar(char c, uint16_t x, uint16_t y,int8_t fontsize, uint32_t color)
             	        put_pixel_RGB565(x+i*fontsize_x+jsize, y+j*fontsize_y+isize, r,g,b);
 	            }
 			}
+			else if ( erase != 0 )
+			{
+	            for ( jsize = 0 ; jsize < fontsize_y; jsize++)
+    	        {
+        	        for ( isize = 0 ; isize < fontsize_x; isize++)
+            	        put_pixel_RGB565(x+i*fontsize_x+jsize, y+j*fontsize_y+isize, 0,0,0);
+	            }
+			}
         }
     }
 }
 
 
-void DrawString(const char* str, uint16_t x, uint16_t y, int8_t fontsize, uint32_t color)
+void DrawString(const char* str, uint16_t x, uint16_t y, int8_t fontsize, uint32_t color, uint8_t erase)
 {
 
 #ifdef DEBUG_LOG
@@ -218,7 +225,7 @@ void DrawString(const char* str, uint16_t x, uint16_t y, int8_t fontsize, uint32
 #endif
     while (*str)
 	{
-    	DrawChar(*str++, x, y,fontsize, color);
+    	DrawChar(*str++, x, y,fontsize, color,erase);
         x += CHAR_WIDTH*(fontsize > 0 ? fontsize : 1 );
     }
 }
@@ -262,7 +269,7 @@ void DrawISS( int lon, int lat)
         }
     }
 	snprintf(szPos,sizeof(szPos)-1,"Lat:%d%s - Lon:%d%s",abs(lat),lat>0?"W":"E",abs(lon),lon>0?"S":"N");
-	DrawString(szPos,40,300,2,RGB(0,0,255));
+	DrawString(szPos,40,300,2,RGB(0,0,255),0);
 }
 
 
@@ -423,13 +430,27 @@ static PyObject *pydisplay_clearScreen(PyObject *self,  PyObject *args)
 }
 
 
+static PyObject *pydisplay_clearScreenBottom(PyObject *self,  PyObject *args)
+{
+	if ( initFramebuffer() == 0 )
+		return NULL;
+
+	memset(fbp+280*480*2,0,finfo.smem_len - (280*480)*2 );
+
+	freeFramebuffer();
+
+	Py_RETURN_TRUE;
+}
+
+
+
 static PyObject *pydisplay_drawString(PyObject *self, PyObject *args)
 {
     const char *str;
-	int  x,y,size;
+	int  x,y,size, erase;
 	uint32_t color;
 
-    if (!PyArg_ParseTuple(args, "siiil", &str,&x,&y,&size,&color))
+    if (!PyArg_ParseTuple(args, "siiili", &str,&x,&y,&size,&color,&erase))
     {
         return NULL;
     }
@@ -439,7 +460,7 @@ static PyObject *pydisplay_drawString(PyObject *self, PyObject *args)
         return NULL;
 	}
 
-	DrawString(str, x, y, size,color);
+	DrawString(str, x, y, size,color,erase);
 
     freeFramebuffer();
 
@@ -449,8 +470,9 @@ static PyObject *pydisplay_drawString(PyObject *self, PyObject *args)
 
 static PyMethodDef pydisplayMethods[] = {
     {"showBMP", pydisplay_showBMP, METH_VARARGS, "Displays a 480x320 24bits BMP."},
-    {"showISS", pydisplay_showISS, METH_VARARGS, "Displays a yellow star."},
+    {"showISS", pydisplay_showISS, METH_VARARGS, "Displays a yellow star at the ISS's position."},
 	{ "clearScreen", pydisplay_clearScreen, METH_NOARGS, "Clears the screen" },
+	{ "clearScreenBottom", pydisplay_clearScreenBottom, METH_NOARGS, "Clears the bottom of the screen" },
 	{ "drawString", pydisplay_drawString, METH_VARARGS, "displays a string" },
     {NULL, NULL, 0, NULL}        /* Sentinel */
 };
