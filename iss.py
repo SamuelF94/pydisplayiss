@@ -8,8 +8,9 @@ import threading
 import time
 import os.path
 import os
-import pydisplay
 import RPi.GPIO as GPIO
+from geopy.distance  import geodesic
+import pydisplay
 
 # some globals
 http_proxy  = "http://192.168.50.10:8118"
@@ -25,6 +26,8 @@ proxyDict = {
 headersDict = {"Accept": "application/json" }
 headersAllDict = {"Accept": "*/*" , "User-Agent" : "PythonISS/1.0 (http://www.feutry.fr; sfeutry@club-internet.fr) python script" }
 
+
+sUrlCurrentPosition = 'http://ip-api.com/json/'
 sUrlPosition = 'http://api.open-notify.org/iss-now.json'
 sUrlInfo1 = "https://corquaid.github.io/international-space-station-APIs/JSON/people-in-space.json"
 sUrlInfo2 = "https://corquaid.github.io/international-space-station-APIs/JSON/iss-docked-spacecraft.json"
@@ -33,10 +36,27 @@ CurrentData = {'expedition_patch':'' , 'expedition_image':''}
 patchImg = 'cache/patch.bmp3'
 crewImg = 'cache/crew.bmp3'
 diapo_tempo = 15
-
+bBlink = False
 
 bAction = False
 s = requests.Session()
+
+
+
+
+
+class Blinker (threading.Thread):
+	def __init__(self):
+		threading.Thread.__init__(self)
+
+	def run(self):
+		global bBlink
+		while True:
+			try:
+				GPIO.output(20, bBlink)
+				time.sleep(0.5)
+				GPIO.output(20, 0)
+				time.sleep(0.5)
 
 
 def RGB( red, green, blue ):
@@ -81,16 +101,16 @@ def callback_mission():
 	
 
 def callback_crewphoto():
-	try
+	try:
 		global bAction
 		bAction = True
 		getImage("expedition_image",crewImg)
 		time.sleep(10)
 		bAction = False
-    except:
-        print("callback_crewphoto exception")
-    finally:
-        bAction = False
+	except:
+		print("callback_crewphoto exception")
+	finally:
+		bAction = False
 
 
 def callback_crewmembers():
@@ -110,10 +130,10 @@ def callback_crewmembers():
 				pydisplay.drawString(astro["name"]  + " (" + astro["country"] + ")",200,80+i*25,-1,RGB(0,125,255))
 				i = i +1
 		time.sleep(10)
-    except:
-        print("callback_crewmembers exception")
-    finally:
-        bAction = False
+	except:
+		print("callback_crewmembers exception")
+	finally:
+		bAction = False
 
 
 def callback_spacecrafts():
@@ -132,10 +152,10 @@ def callback_spacecrafts():
 				pydisplay.drawString(spacecraft["country"] + " (" + spacecraft["mission_type"] + ")",200,80+i*25,-1,RGB(0,125,255))
 				i = i +1
 		time.sleep(10)
-    except:
-        print("callback_spacecrafts exception")
-    finally:
-        bAction = False
+	except:
+		print("callback_spacecrafts exception")
+	finally:
+		bAction = False
 
 def callback_diapo():
 	try:
@@ -167,10 +187,10 @@ def callback_diapo():
 				displayName = (astro["position"] + " " + astro["country"]).center(30)
 				pydisplay.drawString(displayName,0,300,2,RGB(255,125,125),1)
 				i = i +1
-    except:
-        print("callback_diapo exception")
-    finally:
-        bAction = False
+	except:
+		print("callback_diapo exception")
+	finally:
+		bAction = False
 
 def callback_shutdown():
 	try:
@@ -178,10 +198,10 @@ def callback_shutdown():
 		bAction = True
 		print("shutdown")
 		os.system("sudo /usr/sbin/shutdown now");
-    except:
-        print("callback_shutdown exception")
-    finally:
-        bAction = False
+	except:
+		print("callback_shutdown exception")
+	finally:
+		bAction = False
 
 
 
@@ -189,7 +209,8 @@ def GPIOSetup():
 	# GPIO initialization 
 	GPIO.setmode(GPIO.BCM) # use GPIO number and not pin numbers
 	# le HIGH 
-	GPIO.setup(12, GPIO.OUT, initial = GPIO.HIGH)
+	GPIO.setup(20, GPIO.OUT, initial = GPIO.HIGH)	# HIGH reference
+	GPIO.setup(16, GPIO.OUT, initial = GPIO.LOW)	# LED to blink
 
 	GPIO.setup(5, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)	# display mission sign -  pin 29
 	GPIO.setup(6, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)	# display crew photo - pin 31 
@@ -222,7 +243,15 @@ def Save():
 
 Init()
 test = pydisplay.showBMP("world.bmp")
-
+b = Blinker()
+b.start()
+r = s.get(sUrlCurrentPosition, headers= headersDict, proxies=proxyDict)
+jsontext = r.text
+response = json.loads(jsontext)
+#print(response)
+MyLat = response["lat"]
+MyLon = response["lon"]
+MyPos = ( MyLat, MyLon )
 while True:
 	try:
 		r = s.get(sUrlPosition, headers= headersDict, proxies=proxyDict)
@@ -235,9 +264,13 @@ while True:
 		if ( bAction == False ):
 			test = pydisplay.showBMP("world.bmp")
 			test = pydisplay.showISS(longitude, latitude)
-		
+			ISSPos = ( latitude, longitude )
+			if ( geodesic( MyPos,ISSPos).km < 800 ):
+				bBlink = True
+			else
+				bblick = False;
 	except:
 		print("Main loop exception");
 	finally:
 		time.sleep(10)
-	
+
